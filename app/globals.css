@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-white text-slate-800 antialiased;
+}
+
+.container-page {
+  @apply mx-auto w-full max-w-5xl px-5 sm:px-8;
+}
+
+.prose-block p {
+  @apply mb-4 leading-relaxed text-slate-700;
+}
+
+.prose-block h2 {
+  @apply mt-10 mb-3 text-2xl font-semibold tracking-tight text-ink;
+}
+
+.prose-block h3 {
+  @apply mt-7 mb-2 text-lg font-semibold text-ink;
+}
+
+.prose-block ul {
+  @apply mb-4 list-disc space-y-1 pl-5 text-slate-700;
+}
+
+.prose-block ol {
+  @apply mb-4 list-decimal space-y-2 pl-5 text-slate-700;
+}
