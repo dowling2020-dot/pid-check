@@ -1,18 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { FALLBACK_EMAIL, FORM_ENDPOINT } from "@/lib/site";
+import { track } from "@vercel/analytics";
+import { FALLBACK_EMAIL, FALLBACK_SUBJECT, LEAD_CAPTURE_ENDPOINT } from "@/lib/site";
+import type { CheckSummary } from "@/lib/validate";
 
-// Email capture with ZERO backend infrastructure.
-// - If FORM_ENDPOINT is configured (a Formspree-style static form endpoint),
-//   we POST the email there.
-// - If it is null (the default), we fall back to a plain mailto link.
-// Either way there is no database and nothing is stored by this app.
+// Email capture posts to a stateless Supabase Edge Function. This app stores
+// nothing itself — no database, no client library, just a fetch. If the POST
+// fails for any reason we degrade to a plain mailto link.
 
-export default function EmailCapture({ failCount }: { failCount: number }) {
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const mailtoHref = `mailto:${FALLBACK_EMAIL}?subject=${encodeURIComponent(
+  FALLBACK_SUBJECT
+)}&body=${encodeURIComponent(
+  "I'd like full-catalogue PID validation and GTIN remediation before the 1 November 2026 deadline. My store / catalogue size:"
+)}`;
+
+export default function EmailCapture({ summary }: { summary: CheckSummary }) {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const [invalid, setInvalid] = useState(false);
 
+  const failCount = summary.fail;
   const heading =
     failCount > 0
       ? `This checked a sample and found ${failCount} row${failCount === 1 ? "" : "s"} that would be rejected.`
@@ -20,17 +30,38 @@ export default function EmailCapture({ failCount }: { failCount: number }) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!FORM_ENDPOINT) return; // mailto path handles it
+    const trimmed = email.trim();
+    if (!EMAIL_RE.test(trimmed)) {
+      setInvalid(true);
+      return;
+    }
+    setInvalid(false);
     setState("sending");
     try {
-      const res = await fetch(FORM_ENDPOINT, {
+      const res = await fetch(LEAD_CAPTURE_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ email, source: "pid-check /check" }),
+        body: JSON.stringify({
+          email: trimmed,
+          source: "pid-check",
+          payload: {
+            rows_checked: summary.total,
+            pass: summary.pass,
+            warn: summary.warn,
+            fail: summary.fail,
+          },
+        }),
       });
-      setState(res.ok ? "done" : "error");
+      if (res.status === 200) {
+        setState("done");
+        track("lead_submit_success");
+      } else {
+        setState("error");
+        track("lead_submit_error", { status: res.status });
+      }
     } catch {
       setState("error");
+      track("lead_submit_error", { status: 0 });
     }
   }
 
@@ -44,16 +75,20 @@ export default function EmailCapture({ failCount }: { failCount: number }) {
 
       {state === "done" ? (
         <p className="mt-5 rounded-lg bg-emerald-500/15 px-4 py-3 text-sm text-emerald-200">
-          Thanks — we&apos;ve got your email and will reach out about full-catalogue validation.
+          Thanks — we&apos;ll be in touch before the 1&nbsp;November deadline.
         </p>
-      ) : FORM_ENDPOINT ? (
-        <form onSubmit={submit} className="mt-5 flex flex-col gap-3 sm:flex-row">
+      ) : (
+        <form onSubmit={submit} className="mt-5 flex flex-col gap-3 sm:flex-row" noValidate>
           <input
             type="email"
             required
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (invalid) setInvalid(false);
+            }}
             placeholder="you@yourstore.com"
+            aria-invalid={invalid}
             className="w-full flex-1 rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-white/40 outline-none focus:border-brand focus:ring-2 focus:ring-brand/30"
           />
           <button
@@ -64,24 +99,16 @@ export default function EmailCapture({ failCount }: { failCount: number }) {
             {state === "sending" ? "Sending…" : "Notify me"}
           </button>
         </form>
-      ) : (
-        // No endpoint configured yet — mailto fallback, still zero infrastructure.
-        <a
-          href={`mailto:${FALLBACK_EMAIL}?subject=${encodeURIComponent(
-            "Full-catalogue PID validation"
-          )}&body=${encodeURIComponent(
-            "I'd like full-catalogue PID validation and GTIN remediation before the 1 November 2026 deadline. My store / catalogue size:"
-          )}`}
-          className="mt-5 inline-block rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark"
-        >
-          Email us about full-catalogue validation
-        </a>
+      )}
+
+      {invalid && (
+        <p className="mt-3 text-sm text-amber-300">Enter a valid email address.</p>
       )}
 
       {state === "error" && (
         <p className="mt-3 text-sm text-rose-300">
           Something went wrong sending that. Please email{" "}
-          <a className="underline" href={`mailto:${FALLBACK_EMAIL}`}>
+          <a className="underline" href={mailtoHref}>
             {FALLBACK_EMAIL}
           </a>{" "}
           instead.

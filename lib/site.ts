@@ -8,8 +8,12 @@ export const SITE_TAGLINE =
 // The mandatory PID deadline for EU customs declarations on distance sales.
 export const PID_DEADLINE_ISO = "2026-11-01T00:00:00Z";
 
-// Formspree-style endpoint for the email capture form.
-// TODO(john): replace with a real Formspree (or equivalent static form) endpoint.
-// While this is null the checker falls back to a mailto link — no database, ever.
-export const FORM_ENDPOINT: string | null = null;
-export const FALLBACK_EMAIL = "hello@pid-check.example";
+// Lead-capture endpoint (Supabase Edge Function). Stateless from this app's
+// point of view — we POST the email + validation summary and forget it. No
+// database or client library is bundled here; it's a plain fetch.
+export const LEAD_CAPTURE_ENDPOINT =
+  "https://gzcsyuuszqihktjktzfw.supabase.co/functions/v1/lead-capture";
+
+// mailto fallback used when the endpoint POST fails for any reason.
+export const FALLBACK_EMAIL = "dowling2020@gmail.com";
+export const FALLBACK_SUBJECT = "PID full-catalogue validation";

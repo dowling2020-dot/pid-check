@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { track } from "@vercel/analytics";
 import { checkInput, MAX_ROWS, type CheckResult, type Severity } from "@/lib/validate";
 import EmailCapture from "@/components/EmailCapture";
 
@@ -29,7 +30,9 @@ export default function Checker() {
   const [result, setResult] = useState<CheckResult | null>(null);
 
   function run() {
-    setResult(checkInput(input));
+    const r = checkInput(input);
+    track("validate_click", { rows: r.summary.total });
+    setResult(r);
   }
 
   return (
@@ -158,7 +161,7 @@ function Results({ result }: { result: CheckResult }) {
       </div>
 
       {/* Results CTA */}
-      <EmailCapture failCount={summary.fail} />
+      <EmailCapture summary={summary} />
     </div>
   );
 }
